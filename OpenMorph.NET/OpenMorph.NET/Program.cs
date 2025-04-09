@@ -80,7 +80,7 @@ namespace OpenMorph.NET
 
             await rootCommand.InvokeAsync(args);
         }
-        // Method to read STL file content using STLdotnet (correctly using STLdotnet for the job)
+        // Method to read STL file content using STLdotnet with parallel processing
         static (string, string) ReadStlFileWithSTLdotnet(string filePath)
         {
             // Read the STL file using STLdotnet's STLDocument
@@ -93,9 +93,15 @@ namespace OpenMorph.NET
             var vertexList = new List<(decimal X, decimal Y, decimal Z)>(); // Use decimal instead of double
             int pointIndex = 0; // Track the index for faces
 
-            // Loop through all the facets (triangles) in the STL model
-            foreach (var facet in stlModel.Facets)
+            // This will store results for points in the order they appear
+            var pointResults = new List<string>();
+
+            // Parallelize the reading of facets, ensuring we maintain correct order
+            Parallel.ForEach(stlModel.Facets, facet =>
             {
+                // Store temporary results for the current facet
+                var facetPoints = new List<string>();
+
                 // Each facet consists of three vertices
                 foreach (var vertex in facet.Vertices)
                 {
@@ -116,17 +122,27 @@ namespace OpenMorph.NET
                     }
 
                     // Add the point to the list, ensuring proper formatting with InvariantCulture
-                    points.Add($"[{x.ToString("F14", CultureInfo.InvariantCulture)},{y.ToString("F14", CultureInfo.InvariantCulture)},{z.ToString("F14", CultureInfo.InvariantCulture)}]");
+                    facetPoints.Add($"[{x.ToString("F14", CultureInfo.InvariantCulture)},{y.ToString("F14", CultureInfo.InvariantCulture)},{z.ToString("F14", CultureInfo.InvariantCulture)}]");
+                }
+
+                // Add the facet's points in the correct order to the main results
+                lock (pointResults)
+                {
+                    pointResults.AddRange(facetPoints);
                 }
 
                 // Each face refers to 3 vertices, so create a face with the correct indices
-                faces.Add($"[{pointIndex}, {pointIndex + 1}, {pointIndex + 2}]");
+                lock (faces)
+                {
+                    faces.Add($"[{pointIndex}, {pointIndex + 1}, {pointIndex + 2}]");
+                }
 
-                pointIndex += 3; // Increase point index for the next face
-            }
+                // Increase point index for the next face
+                pointIndex += 3;
+            });
 
             // Join the points and faces into comma-separated strings with consistent formatting
-            string pointsStr = string.Join(",\n", points);
+            string pointsStr = string.Join(",\n", pointResults);
             string facesStr = string.Join(",\n", faces);
 
             return (pointsStr, facesStr);
