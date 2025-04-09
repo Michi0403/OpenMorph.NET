@@ -7,13 +7,13 @@ namespace QuantumConcepts.Formats.StereoLithography
     public class Vertex : IEquatable<Vertex>
     {
         /// <summary>The X coordinate of this <see cref="Vertex"/>.</summary>
-        public float X { get; set; } = 0;
+        public double X { get; set; } = 0;
 
         /// <summary>The Y coordinate of this <see cref="Vertex"/>.</summary>
-        public float Y { get; set; } = 0;
+        public double Y { get; set; } = 0;
 
         /// <summary>The Z coordinate of this <see cref="Vertex"/>.</summary>
-        public float Z { get; set; } = 0;
+        public double Z { get; set; } = 0;
 
         /// <summary>Creates a new, empty <see cref="Vertex"/>.</summary>
         public Vertex() { }
@@ -22,7 +22,7 @@ namespace QuantumConcepts.Formats.StereoLithography
         /// <param name="x"><see cref="X"/></param>
         /// <param name="y"><see cref="Y"/></param>
         /// <param name="z"><see cref="Z"/></param>
-        public Vertex(float x, float y, float z) : this()
+        public Vertex(double x, double y, double z) : this()
         {
             X = x;
             Y = y;
@@ -83,12 +83,12 @@ namespace QuantumConcepts.Formats.StereoLithography
             };
         }
 
-        private static float ParseCoordinate(string which, string value)
+        private static double ParseCoordinate(string which, string value)
         {
             const NumberStyles numberStyle = (NumberStyles.AllowExponent | NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign);
-            float parsed;
+            double parsed;
 
-            if (!float.TryParse(value, numberStyle, CultureInfo.InvariantCulture, out parsed))
+            if (!double.TryParse(value, numberStyle, CultureInfo.InvariantCulture, out parsed))
             {
                 throw new FormatException($"Could not parse {which} coordinate as a decimal from value: {value}");
             }
@@ -100,12 +100,12 @@ namespace QuantumConcepts.Formats.StereoLithography
         /// <param name="reader">The reader which contains a <see cref="Vertex"/> to be read at the current position</param>
         public static Vertex Read(BinaryReader reader)
         {
-            const int floatSize = sizeof(float);
-            const int vertexSize = (floatSize * 3);
+            const int floatSize = sizeof(float); // 4 bytes for a float
+            const int vertexSize = floatSize * 3; // 3 floats for each vertex = 12 bytes
 
             if (reader == null) throw new ArgumentNullException(nameof(reader));
 
-            // Read 3 floats.
+            // Read 3 floats for the X, Y, Z coordinates
             byte[] data = new byte[vertexSize];
             int bytesRead = reader.Read(data, 0, data.Length);
 
@@ -117,7 +117,7 @@ namespace QuantumConcepts.Formats.StereoLithography
             {
                 X = BitConverter.ToSingle(data, 0),
                 Y = BitConverter.ToSingle(data, floatSize),
-                Z = BitConverter.ToSingle(data, (floatSize * 2))
+                Z = BitConverter.ToSingle(data, floatSize * 2)
             };
         }
 

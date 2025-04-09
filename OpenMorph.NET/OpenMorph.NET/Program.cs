@@ -7,6 +7,7 @@ using System.Text;
 using System.Collections.Generic;
 using System.Xml;
 using QuantumConcepts.Formats.StereoLithography;
+using System.Globalization;
 namespace OpenMorph.NET
 {
     internal class Program
@@ -88,26 +89,43 @@ namespace OpenMorph.NET
             var points = new List<string>();
             var faces = new List<string>();
 
-            int pointIndex = 0; // To track the indices of the vertices
+            // List to hold all vertices to maintain their indices
+            var vertexList = new List<(decimal X, decimal Y, decimal Z)>(); // Use decimal instead of double
+            int pointIndex = 0; // Track the index for faces
 
             // Loop through all the facets (triangles) in the STL model
             foreach (var facet in stlModel.Facets)
             {
-                // Add vertices of the current facet (triangle)
+                // Each facet consists of three vertices
                 foreach (var vertex in facet.Vertices)
                 {
-                    // Use the full floating-point precision without limiting the number of decimals
-                    points.Add($"[{vertex.X}, {vertex.Y}, {vertex.Z}]");
+                    // Use decimal for maximum precision
+                    decimal x = (decimal)vertex.X;  // No scaling here, directly use the original coordinates
+                    decimal y = (decimal)vertex.Y;
+                    decimal z = (decimal)vertex.Z;
+
+                    // Check if the vertex is already in the list to avoid duplication
+                    var vertexTuple = (x, y, z);
+                    int vertexIndex = vertexList.IndexOf(vertexTuple);
+
+                    // If the vertex does not exist, add it and note the index
+                    if (vertexIndex == -1)
+                    {
+                        vertexList.Add(vertexTuple);
+                        vertexIndex = vertexList.Count - 1; // This is the new index of the added vertex
+                    }
+
+                    // Add the point to the list, ensuring proper formatting with InvariantCulture
+                    points.Add($"[{x.ToString("F14", CultureInfo.InvariantCulture)},{y.ToString("F14", CultureInfo.InvariantCulture)},{z.ToString("F14", CultureInfo.InvariantCulture)}]");
                 }
 
-                // Create faces, which in OpenSCAD format are zero-indexed
+                // Each face refers to 3 vertices, so create a face with the correct indices
                 faces.Add($"[{pointIndex}, {pointIndex + 1}, {pointIndex + 2}]");
 
-                // Increment pointIndex for the next set of vertices
-                pointIndex += 3;
+                pointIndex += 3; // Increase point index for the next face
             }
 
-            // Join the points and faces into comma-separated strings
+            // Join the points and faces into comma-separated strings with consistent formatting
             string pointsStr = string.Join(",\n", points);
             string facesStr = string.Join(",\n", faces);
 
@@ -119,9 +137,12 @@ namespace OpenMorph.NET
         {
             var (points, faces) = ReadStlFileWithSTLdotnet(filepath);
 
-            // Create OpenSCAD code for the object
+            // Extract the file name without the extension to use as the module name
+            string moduleName = Path.GetFileNameWithoutExtension(filepath);
+
+            // Create OpenSCAD code for the object using the STL file name as the module name
             return $@"
-module object1(scale) {{
+module {moduleName}(scale) {{
     polyhedron(
         points = [
             {points}
