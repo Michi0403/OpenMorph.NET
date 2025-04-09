@@ -19,12 +19,17 @@ namespace OpenMorph.NET
                 // Optional force flag if needed later
                 new Option<bool>(
                     "-f",
-                    "Force process file even if warnings are present")
+                    "Force process file even if warnings are present"),
+
+                // Option to force the format
+                new Option<string>(
+                    "--format",
+                    description: "Force the file format: 'ascii' or 'binary'. If not provided, auto-detection is used.")
             };
 
             rootCommand.Description = "OpenMorph.NET - A tool to convert STL to OpenSCAD";
 
-            rootCommand.Handler = CommandHandler.Create<string, bool>(async (filepath, force) =>
+            rootCommand.Handler = CommandHandler.Create<string, bool, string>(async (filepath, force, format) =>
             {
                 // If no file path is provided, offer files in the current directory
                 if (string.IsNullOrWhiteSpace(filepath))
@@ -45,10 +50,14 @@ namespace OpenMorph.NET
                     return;
                 }
 
+                // Format detection and optional overwrite
+                string fileFormat = format ?? DetectStlFormat(filepath);
+                Console.WriteLine($"Detected STL Format: {fileFormat}");
+
                 // Process the STL file
                 try
                 {
-                    string stlContent = ReadStlFile(filepath);
+                    string stlContent = ReadStlFile(filepath, fileFormat);
                     Console.WriteLine("STL File Content (First 500 characters):");
                     Console.WriteLine(stlContent.Substring(0, Math.Min(500, stlContent.Length)));
                 }
@@ -61,8 +70,25 @@ namespace OpenMorph.NET
             await rootCommand.InvokeAsync(args);
         }
 
-        // Method to read STL file content
-        static string ReadStlFile(string filePath)
+        // Method to read STL file content based on format (ASCII or Binary)
+        static string ReadStlFile(string filePath, string format)
+        {
+            if (format.ToLower() == "ascii")
+            {
+                return ReadAsciiStlFile(filePath);
+            }
+            else if (format.ToLower() == "binary")
+            {
+                return ReadBinaryStlFile(filePath);
+            }
+            else
+            {
+                throw new InvalidOperationException("Invalid STL format specified.");
+            }
+        }
+
+        // Method to read ASCII STL file content
+        static string ReadAsciiStlFile(string filePath)
         {
             StringBuilder fileContent = new StringBuilder();
 
@@ -80,6 +106,49 @@ namespace OpenMorph.NET
             }
 
             return fileContent.ToString();
+        }
+
+        // Method to read Binary STL file content
+        static string ReadBinaryStlFile(string filePath)
+        {
+            byte[] fileBytes = File.ReadAllBytes(filePath);
+            StringBuilder fileContent = new StringBuilder();
+
+            // Read binary STL header and number of triangles
+            int numTriangles = BitConverter.ToInt32(fileBytes, 80);  // Number of triangles starts at byte 80
+            fileContent.AppendLine($"Number of Triangles: {numTriangles}");
+
+            // Read the triangles (each triangle is 50 bytes)
+            for (int i = 0; i < numTriangles; i++)
+            {
+                int offset = 84 + i * 50;  // The first 84 bytes are header and number of triangles
+                byte[] triangleData = new byte[50];
+                Array.Copy(fileBytes, offset, triangleData, 0, 50);
+                fileContent.AppendLine($"Triangle {i + 1}: {BitConverter.ToString(triangleData)}");
+            }
+
+            return fileContent.ToString();
+        }
+
+        // Method to detect STL file format (ASCII or Binary)
+        static string DetectStlFormat(string filePath)
+        {
+            using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            {
+                byte[] header = new byte[5];
+                fs.Read(header, 0, 5);
+
+                // Check if it starts with 'solid' (ASCII STL)
+                if (Encoding.ASCII.GetString(header) == "solid")
+                {
+                    return "ascii";
+                }
+                else
+                {
+                    // Binary STL typically doesn't start with "solid"
+                    return "binary";
+                }
+            }
         }
 
         // Method to offer STL files in the current directory if no filepath is provided

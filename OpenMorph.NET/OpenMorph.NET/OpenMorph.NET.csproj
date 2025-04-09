@@ -15,6 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\STLdotNETbyQuantumConcepts\STLdotNET-master\src\STLdotNET.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="Naruto_Kakashi_Anbu_Mask.stl">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
