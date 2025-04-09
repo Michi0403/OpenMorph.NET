@@ -24,12 +24,18 @@ namespace OpenMorph.NET
                 // Option to force the format
                 new Option<string>(
                     "--format",
-                    description: "Force the file format: 'ascii' or 'binary'. If not provided, auto-detection is used.")
+                    description: "Force the file format: 'ascii' or 'binary'. If not provided, auto-detection is used."),
+
+                // Option to set the maximum string length (default to maximum string length in .NET)
+                new Option<int>(
+                    "--max-length",
+                    getDefaultValue: () => Int32.MaxValue,
+                    description: "The maximum number of characters to display from the STL file. Defaults to maximum string length.")
             };
 
             rootCommand.Description = "OpenMorph.NET - A tool to convert STL to OpenSCAD";
 
-            rootCommand.Handler = CommandHandler.Create<string, bool, string>(async (filepath, force, format) =>
+            rootCommand.Handler = CommandHandler.Create<string, bool, string, int>(async (filepath, force, format, maxLength) =>
             {
                 // If no file path is provided, offer files in the current directory
                 if (string.IsNullOrWhiteSpace(filepath))
@@ -58,8 +64,8 @@ namespace OpenMorph.NET
                 try
                 {
                     string stlContent = ReadStlFile(filepath, fileFormat);
-                    Console.WriteLine("STL File Content (First 500 characters):");
-                    Console.WriteLine(stlContent.Substring(0, Math.Min(500, stlContent.Length)));
+                    Console.WriteLine("STL File Content (First " + maxLength + " characters):");
+                    Console.WriteLine(stlContent.Substring(0, Math.Min(maxLength, stlContent.Length)));
                 }
                 catch (Exception ex)
                 {
