@@ -1,8 +1,12 @@
 ﻿using System;
 using System.CommandLine;
 using System.CommandLine.NamingConventionBinder;
+using System.IO;
+using System.Linq;
 using System.Text;
-
+using System.Collections.Generic;
+using System.Xml;
+using QuantumConcepts.Formats.StereoLithography;
 namespace OpenMorph.NET
 {
     internal class Program
@@ -11,22 +15,18 @@ namespace OpenMorph.NET
         {
             var rootCommand = new RootCommand
             {
-                // Define the filepath argument
                 new Option<string>(
                     "--filepath",
                     description: "Path to the STL file to be processed."),
 
-                // Optional force flag if needed later
                 new Option<bool>(
                     "-f",
                     "Force process file even if warnings are present"),
 
-                // Option to force the format
                 new Option<string>(
                     "--format",
                     description: "Force the file format: 'ascii' or 'binary'. If not provided, auto-detection is used."),
 
-                // Option to set the maximum string length (default to maximum string length in .NET)
                 new Option<int>(
                     "--max-length",
                     getDefaultValue: () => Int32.MaxValue,
@@ -37,13 +37,11 @@ namespace OpenMorph.NET
 
             rootCommand.Handler = CommandHandler.Create<string, bool, string, int>(async (filepath, force, format, maxLength) =>
             {
-                // If no file path is provided, offer files in the current directory
                 if (string.IsNullOrWhiteSpace(filepath))
                 {
                     filepath = await OfferStlFilesInDirectory();
                 }
 
-                // Validate file path argument
                 if (string.IsNullOrWhiteSpace(filepath))
                 {
                     Console.WriteLine("Error: No valid file path provided, and no STL files were found.");
@@ -56,23 +54,19 @@ namespace OpenMorph.NET
                     return;
                 }
 
-                // Format detection and optional overwrite
                 string fileFormat = format ?? DetectStlFormat(filepath);
                 Console.WriteLine($"Detected STL Format: {fileFormat}");
 
-                // Process the STL file
                 try
                 {
-                    // Destructure the tuple returned by ReadStlFile into points and faces
-                    var (points, faces) = ReadStlFile(filepath, fileFormat);
+                    // Read the STL file using STLdotnet
+                    var (points, faces) = ReadStlFileWithSTLdotnet(filepath);
 
                     Console.WriteLine("STL File Content (First " + maxLength + " characters):");
                     Console.WriteLine(points.Substring(0, Math.Min(maxLength, points.Length)));
 
-                    // Generate OpenSCAD code
                     string openScadCode = GenerateOpenScadCode(filepath, fileFormat);
 
-                    // Write the OpenSCAD code to a file with the same name as the STL file
                     string scadFilePath = Path.ChangeExtension(filepath, ".scad");
                     File.WriteAllText(scadFilePath, openScadCode);
                     Console.WriteLine($"OpenSCAD code has been written to {scadFilePath}");
@@ -85,118 +79,58 @@ namespace OpenMorph.NET
 
             await rootCommand.InvokeAsync(args);
         }
-
-        // Method to read STL file content based on format (ASCII or Binary)
-        static (string, string) ReadStlFile(string filePath, string format)
+        // Method to read STL file content using STLdotnet (correctly using STLdotnet for the job)
+        static (string, string) ReadStlFileWithSTLdotnet(string filePath)
         {
-            if (format.ToLower() == "ascii")
-            {
-                // If the format is ASCII, return the result from ReadAsciiStlFile
-                return ReadAsciiStlFile(filePath); // This must return a tuple like (points, faces)
-            }
-            else if (format.ToLower() == "binary")
-            {
-                // If the format is binary, return the result from ReadBinaryStlFile
-                return ReadBinaryStlFile(filePath); // This returns a tuple (points, faces)
-            }
-            else
-            {
-                throw new InvalidOperationException("Invalid STL format specified.");
-            }
-        }
+            // Read the STL file using STLdotnet's STLDocument
+            STLDocument stlModel = STLDocument.Open(filePath);
 
-        // Method to read ASCII STL file content and extract points/faces
-        static (string, string) ReadAsciiStlFile(string filePath)
-        {
-            var points = new List<string>(); // To store point coordinates
-            var faces = new List<string>();  // To store faces as index-based references
-
-            using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
-            using (StreamReader reader = new StreamReader(fs))
-            {
-                string line;
-                string vertexLine;
-                int pointIndex = 0; // This will help us track point indices for faces
-
-                while ((line = reader.ReadLine()) != null)
-                {
-                    // Look for vertices in the file
-                    if (line.Trim().StartsWith("vertex"))
-                    {
-                        vertexLine = line.Trim();
-                        var parts = vertexLine.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-
-                        if (parts.Length == 4)
-                        {
-                            // Add the vertex (x, y, z) to points
-                            points.Add($"[{parts[1]}, {parts[2]}, {parts[3]}]");
-                        }
-                    }
-
-                    // Look for a new facet (this means the beginning of a new triangle)
-                    if (line.Trim().StartsWith("facet"))
-                    {
-                        // When we encounter a new facet, we know the next 3 vertices make up the face
-                        if (pointIndex >= 3)
-                        {
-                            int baseIndex = pointIndex - 3; // We use the last three points
-                            faces.Add($"[{baseIndex}, {baseIndex + 1}, {baseIndex + 2}]");
-                        }
-                    }
-                }
-            }
-
-            // Join the lists into comma-separated strings
-            string pointsStr = string.Join(",\n", points);
-            string facesStr = string.Join(",\n", faces);
-
-            return (pointsStr, facesStr); // Return both points and faces as a tuple
-        }
-
-        // Method to read Binary STL file content and extract points/faces
-        // Method to read Binary STL file content and extract points/faces
-        static (string, string) ReadBinaryStlFile(string filePath)
-        {
-            byte[] fileBytes = File.ReadAllBytes(filePath);
-            StringBuilder fileContent = new StringBuilder();
-
-            // Read binary STL header and number of triangles
-            int numTriangles = BitConverter.ToInt32(fileBytes, 80);  // Number of triangles starts at byte 80
-            fileContent.AppendLine($"Number of Triangles: {numTriangles}");
-
-            // Lists to hold points and faces for OpenSCAD
             var points = new List<string>();
             var faces = new List<string>();
 
-            // Parse the triangles
-            for (int i = 0; i < numTriangles; i++)
-            {
-                int offset = 84 + i * 50;  // The first 84 bytes are header and number of triangles
-                byte[] triangleData = new byte[50];
-                Array.Copy(fileBytes, offset, triangleData, 0, 50);
+            int pointIndex = 0; // To track the indices of the vertices
 
-                // Extract the three vertices (each vertex is 12 bytes)
-                float[] vertices = new float[9]; // 3 vertices * 3 coordinates
-                for (int j = 0; j < 9; j++)
+            // Loop through all the facets (triangles) in the STL model
+            foreach (var facet in stlModel.Facets)
+            {
+                // Add vertices of the current facet (triangle)
+                foreach (var vertex in facet.Vertices)
                 {
-                    vertices[j] = BitConverter.ToSingle(triangleData, 12 + j * 4);
+                    // Use the full floating-point precision without limiting the number of decimals
+                    points.Add($"[{vertex.X}, {vertex.Y}, {vertex.Z}]");
                 }
 
-                // Append the vertices to the points list (OpenSCAD format)
-                points.Add($"[{vertices[0]}, {vertices[1]}, {vertices[2]}]");
-                points.Add($"[{vertices[3]}, {vertices[4]}, {vertices[5]}]");
-                points.Add($"[{vertices[6]}, {vertices[7]}, {vertices[8]}]");
+                // Create faces, which in OpenSCAD format are zero-indexed
+                faces.Add($"[{pointIndex}, {pointIndex + 1}, {pointIndex + 2}]");
 
-                // Append the face (triangular face with indices to the points array)
-                int baseIndex = i * 3; // Each triangle uses 3 points
-                faces.Add($"[{baseIndex}, {baseIndex + 1}, {baseIndex + 2}]");
+                // Increment pointIndex for the next set of vertices
+                pointIndex += 3;
             }
 
-            // Prepare the output strings
+            // Join the points and faces into comma-separated strings
             string pointsStr = string.Join(",\n", points);
             string facesStr = string.Join(",\n", faces);
 
             return (pointsStr, facesStr);
+        }
+
+        // Method to generate OpenSCAD code from points and faces
+        static string GenerateOpenScadCode(string filepath, string format)
+        {
+            var (points, faces) = ReadStlFileWithSTLdotnet(filepath);
+
+            // Create OpenSCAD code for the object
+            return $@"
+module object1(scale) {{
+    polyhedron(
+        points = [
+            {points}
+        ],
+        faces = [
+            {faces}
+        ]
+    );
+}}";
         }
 
         // Method to detect STL file format (ASCII or Binary)
@@ -207,14 +141,14 @@ namespace OpenMorph.NET
                 byte[] header = new byte[5];
                 fs.Read(header, 0, 5);
 
-                // Check if it starts with 'solid' (ASCII STL)
+                // If the header starts with 'solid', it's ASCII format
                 if (Encoding.ASCII.GetString(header) == "solid")
                 {
                     return "ascii";
                 }
                 else
                 {
-                    // Binary STL typically doesn't start with "solid"
+                    // Otherwise, it's binary
                     return "binary";
                 }
             }
@@ -231,7 +165,6 @@ namespace OpenMorph.NET
                 return null;
             }
 
-            // List the files and ask the user to select one
             Console.WriteLine("No file path provided. Here are the available STL files:");
 
             for (int i = 0; i < stlFiles.Length; i++)
@@ -244,31 +177,11 @@ namespace OpenMorph.NET
 
             if (int.TryParse(userInput, out int selectedFileIndex) && selectedFileIndex >= 1 && selectedFileIndex <= stlFiles.Length)
             {
-                return stlFiles[selectedFileIndex - 1]; // Return the selected file path
+                return stlFiles[selectedFileIndex - 1]; // Return selected file path
             }
 
             Console.WriteLine("No valid selection made.");
             return null;
-        }
-
-        // Method to generate OpenSCAD code from points and faces
-        static string GenerateOpenScadCode(string filepath, string format)
-        {
-            // Get the points and faces (do not call ReadBinaryStlFile here)
-            var (points, faces) = ReadStlFile(filepath, format);
-
-            // Return the OpenSCAD code
-            return $@"
-module object1(scale) {{
-    polyhedron(
-        points = [
-            {points}
-        ],
-        faces = [
-            {faces}
-        ]
-    );
-}}";
         }
     }
 }
