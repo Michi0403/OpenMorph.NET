@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "OpenMorph.NET": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}
