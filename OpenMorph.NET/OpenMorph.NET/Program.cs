@@ -66,10 +66,18 @@ namespace OpenMorph.NET
                     string stlContent = ReadStlFile(filepath, fileFormat);
                     Console.WriteLine("STL File Content (First " + maxLength + " characters):");
                     Console.WriteLine(stlContent.Substring(0, Math.Min(maxLength, stlContent.Length)));
+
+                    // Generate OpenSCAD code
+                    string openScadCode = GenerateOpenScadCode(filepath, fileFormat);
+
+                    // Write the OpenSCAD code to a file with the same name as the STL file
+                    string scadFilePath = Path.ChangeExtension(filepath, ".scad");
+                    File.WriteAllText(scadFilePath, openScadCode);
+                    Console.WriteLine($"OpenSCAD code has been written to {scadFilePath}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error reading file: {ex.Message}");
+                    Console.WriteLine($"Error processing the file: {ex.Message}");
                 }
             });
 
@@ -186,6 +194,46 @@ namespace OpenMorph.NET
 
             Console.WriteLine("No valid selection made.");
             return null;
+        }
+
+        // Method to generate OpenSCAD code from the STL file
+        static string GenerateOpenScadCode(string filepath, string format)
+        {
+            // Parse the STL file and generate points and faces
+            var points = new StringBuilder();
+            var faces = new StringBuilder();
+
+            if (format.ToLower() == "ascii")
+            {
+                // Parse ASCII STL (for simplicity, assuming we just extract points)
+                var content = ReadAsciiStlFile(filepath);
+                // Process the content and extract points and faces
+            }
+            else if (format.ToLower() == "binary")
+            {
+                // Parse Binary STL (similar extraction for faces/points)
+                var content = ReadBinaryStlFile(filepath);
+                // Process the content and extract points and faces
+            }
+
+            // If no valid data found, throw an error
+            if (points.Length == 0 || faces.Length == 0)
+            {
+                throw new InvalidOperationException("Failed to extract meaningful data from the STL file.");
+            }
+
+            // Return generated OpenSCAD code
+            return $@"
+module object1(scale) {{
+    polyhedron(
+        points = [
+            {points.ToString()}
+        ],
+        faces = [
+            {faces.ToString()}
+        ]
+    );
+}}";
         }
     }
 }
