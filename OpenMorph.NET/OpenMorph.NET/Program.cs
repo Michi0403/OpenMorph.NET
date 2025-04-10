@@ -111,102 +111,53 @@ namespace OpenMorph.NET
         }
 
         // Method to read STL file content using STLdotnet with parallel processing
-        static (List<Point> points, List<string> faces) ReadStlFileWithSTLdotnet(string filePath, int maxRenderTimeInMinutes)
+        static(List<Point> points, List<string> faces) ReadStlFileWithSTLdotnet(string filePath, int maxRenderTimeInMinutes)
         {
             try
             {
-                // Read the STL file using STLdotnet's STLDocument
                 STLDocument stlModel = STLDocument.Open(filePath);
-                var points = new ConcurrentBag<Point>();
-                var faces = new ConcurrentBag<string>();
+
+                var allPoints = new List<Point>(stlModel.Facets.Count * 3);
+                var allFaces = new List<string>(stlModel.Facets.Count);
                 int pointIndex = 0;
+
+                var localResults = new ConcurrentBag<(List<Point> points, List<string> faces)>();
+
+                var options = new ParallelOptions();
                 if (maxRenderTimeInMinutes > 0 && maxRenderTimeInMinutes < int.MaxValue)
                 {
-                    CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-                    cancellationTokenSource.CancelAfter(new TimeSpan(0, maxRenderTimeInMinutes, 0));
-
-                 
-                    var task = Parallel.ForEach(stlModel.Facets, new ParallelOptions() { CancellationToken = cancellationTokenSource.Token }, facet =>
-                    {
-                        try
-                        {
-                            var localPoints = new List<Point>();
-
-                            // Each facet consists of three vertices
-                            foreach (var vertex in facet.Vertices)
-                            {
-                                decimal x = (decimal)vertex.X;
-                                decimal y = (decimal)vertex.Y;
-                                decimal z = (decimal)vertex.Z;
-
-                                // Create a new Point object for the vertex
-                                var point = new Point(x, y, z);
-
-                                // Add the point to the list (no need to check for duplicates here)
-                                localPoints.Add(point);
-                            }
-
-                            int localStartIndex;
-                            lock (faces) { localStartIndex = pointIndex; pointIndex += 3; }
-                            // Each face refers to 3 vertices, so create a face with the correct indices
-                            foreach (var p in localPoints)
-                                points.Add((p));
-
-                            faces.Add($"[{localStartIndex - 3}, {localStartIndex - 2}, {localStartIndex - 1}]");
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine(ex.ToString());
-                        }
-                   
-                    });
-                    while (!task.IsCompleted && !cancellationTokenSource.IsCancellationRequested)
-                    {
-                        Console.WriteLine("Still busy... working... don't hurt me...");
-                    }
+                    var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(maxRenderTimeInMinutes));
+                    options.CancellationToken = tokenSource.Token;
                 }
-                else
+
+                Parallel.ForEach(stlModel.Facets, options, facet =>
                 {
-                    var task = Parallel.ForEach(stlModel.Facets, facet =>
+                    var localPoints = new List<Point>();
+                    foreach (var vertex in facet.Vertices)
                     {
-                        var localPoints = new List<Point>();
-
-                        // Each facet consists of three vertices
-                        foreach (var vertex in facet.Vertices)
-                        {
-                            decimal x = (decimal)vertex.X;
-                            decimal y = (decimal)vertex.Y;
-                            decimal z = (decimal)vertex.Z;
-
-                            // Create a new Point object for the vertex
-                            var point = new Point(x, y, z);
-
-                            // Add the point to the list (no need to check for duplicates here)
-                            localPoints.Add(point);
-                        }
-
-                        int localStartIndex;
-                        lock (faces) { localStartIndex = pointIndex; pointIndex += 3; }
-                        // Each face refers to 3 vertices, so create a face with the correct indices
-                        foreach (var p in localPoints)
-                            points.Add((p));
-
-                        faces.Add($"[{localStartIndex - 3}, {localStartIndex - 2}, {localStartIndex - 1}]");
-                    });
-                    while (!task.IsCompleted)
-                    {
-                        Console.WriteLine("Still busy... working... don't hurt me...");
+                        localPoints.Add(new Point((decimal)vertex.X, (decimal)vertex.Y, (decimal)vertex.Z));
                     }
+
+                    int startIdx = Interlocked.Add(ref pointIndex, 3) - 3;
+                    var face = $"[{startIdx}, {startIdx + 1}, {startIdx + 2}]";
+
+                    localResults.Add((localPoints, new List<string> { face }));
+                });
+
+                // Merge all local results
+                foreach (var (points, faces) in localResults.OrderBy(r => r.faces[0])) // ensures order
+                {
+                    allPoints.AddRange(points);
+                    allFaces.AddRange(faces);
                 }
 
-                return (points.ToList(), faces.ToList());
+                return (allPoints, allFaces);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
                 return (new(), new());
             }
-            
         }
 
         // Method to generate OpenSCAD code from points and faces, including min/max bounding box and precision adjustment
@@ -262,6 +213,7 @@ namespace OpenMorph.NET
 function {moduleName}Min() = [{minX:F14}, {minY:F14}, {minZ:F14}];
 function {moduleName}Max() = [{maxX:F14}, {maxY:F14}, {maxZ:F14}];
 
+{moduleName}(1);
 
 module {moduleName}(scale) {{
     polyhedron(
