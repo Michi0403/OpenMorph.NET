@@ -1,3 +1,5 @@
+###Work in Progress some features are partly built out, most Combinations are yet untested, if you just start it you will get asked while file executedfolder you want to convert and you can choose an index.###
+
 # OpenMorph.NET
 
 A cute project of me and my bf ChatGPT 💖
@@ -12,23 +14,35 @@ Most 3D modeling workflows today are divided between designers who use tools lik
 
 That’s exactly what OpenMorph.NET aims to do!
 
-## 🛠 Features
+🛠 Features
+STL → Parametric OpenSCAD Conversion: Convert an STL file into an editable OpenSCAD file with parameters you can tweak.
 
-- **STL → Parametric OpenSCAD Conversion**: Convert an STL file into an editable OpenSCAD file with parameters you can tweak.
-- **Shape Recognition**: Automatically detect basic 3D shapes like spheres, cylinders, cones, and planes.
-- **Memory-Efficient**: Read large STL files in chunks to avoid running out of memory.
-- **Flexibility**: Customize the generated OpenSCAD code for your needs, tweak parameters, or adapt designs.
-  
+High-Precision Polyhedron Export: Outputs detailed .scad code with minimal loss of original mesh precision.
+
+Memory-Efficient: Handles large STL files efficiently using parallel processing and streaming techniques.
+
+Flexible Command-Line Interface: Use flags to control output length, timeouts, and format detection.
+
+Cross-Platform: Works on Windows, macOS, and Linux via self-contained binaries.
+
+⚠️ Note on Shape Recognition:
+While the app is structured to support shape recognition (spheres, cylinders, cones, etc.), this feature is not yet implemented in the current release.
+At the moment, OpenMorph.NET acts as a very fast STL → OpenSCAD polyhedron converter, with exact facet preservation and high fidelity.
+
+Shape recognition will be gradually introduced in future updates — intelligently identifying common primitives without any loss of detail.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-To run this project, you need:
+To run this project from source, you need:
 
 - **.NET 8 SDK** installed on your computer. You can download it from [here](https://dotnet.microsoft.com/download).
-- A **compatible STL file** for testing the conversion process.
+- A **compatible STL file** to test the conversion process.
 
-### Running the App
+> ✅ *Note: The tool has been tested on Windows during development. Self-contained binaries are available for other platforms in the releases.*
+
+### Running From Source
 
 1. Clone the repository:
     ```bash
@@ -41,53 +55,80 @@ To run this project, you need:
     dotnet build
     ```
 
-3. Run the application with an STL file:
+3. Run with command-line options: (If you run without command-line options it asks you, if stl-files exist in the same directory, to choose one of them.)
     ```bash
-    dotnet run -- "path_to_your_stl_file.stl"
+    dotnet run -- \
+      --filepath "your_model.stl" \
+      --format ascii \
+      --max-length 1000 \
+      --max-rendertimeInMinutes 3 \
+      -f
     ```
 
-    Alternatively, you can drag and drop an STL file onto the executable to process it.
+### Command-Line Options
 
-### How it Works
+| Option                     | Description                                                                 |
+|----------------------------|-----------------------------------------------------------------------------|
+| `--filepath`               | Path to the STL file to be processed (optional if using drag-and-drop)     |
+| `-f`                       | Force processing even if warnings are encountered                          |
+| `--format ascii|binary`    | Force the STL file format; auto-detected if not specified                   |
+| `--max-length`             | Limit the number of characters printed from the point list (default: ∞)    |
+| `--max-rendertimeInMinutes`| Maximum render time allowed (default: 0 = no timeout)                      |
 
-- The application accepts an STL file as input (either via drag-and-drop or by specifying the path in the command line).
-- It reads the entire content of the STL file in memory, **line by line**, to avoid memory overload with large files.
-- The data is stored as a string and can be processed for further steps like **parsing the geometry** or **converting to OpenSCAD**.
+You can also **drag & drop** STL files onto the compiled executable.
+
+## 📦 Releases
+
+Self-contained binaries are provided for the following platforms:
+
+- ✅ Windows x64
+- ✅ Windows ARM64
+- ✅ Linux x64
+- ✅ macOS x64
+- ✅ macOS ARM (M1/M2)
+
+> No need to install .NET to run these builds!
+
+Download them from the [Releases](https://github.com/Michi0403/OpenMorph.NET/releases) section.
+
+## ✨ Output Example
+
+When successful, the tool generates an `.scad` file with:
+
+- A `module` containing your 3D model as a polyhedron
+- `Min()` and `Max()` functions for bounding box dimensions
+- High-precision decimal coordinates (up to 14 digits)
 
 ## 🤖 How You Can Help
 
 We welcome contributions from anyone interested in making 3D modeling more accessible and code-driven. Here are some areas where you can help:
 
-- **Parsing & Shape Recognition**: Improve the logic for detecting complex shapes and geometries in STL files.
-- **OpenSCAD Code Generation**: Help develop methods to convert the parsed data into clean, reusable OpenSCAD code.
-- **Testing**: Add test cases with different STL files to ensure the tool works in various scenarios (large files, different shapes, etc.).
-- **Optimizations**: Help optimize the performance, especially when dealing with very large STL files.
+- **Shape Detection**: Improve logic for recognizing complex geometries in STL files.
+- **Code Optimization**: Improve performance for very large models.
+- **Multi-format Support**: Add support for other file formats (e.g., OBJ).
+- **Testing**: Help validate across platforms and STL sources.
 
 ### To Contribute
 
 1. Fork this repository.
-2. Create a new branch (`git checkout -b feature-name`).
-3. Commit your changes (`git commit -am 'Add new feature'`).
-4. Push to the branch (`git push origin feature-name`).
-5. Create a pull request with a clear description of what your changes do.
+2. Create a new branch:  
+   ```bash
+   git checkout -b feature-name
+Commit your changes:
 
-## 📄 License
+git commit -am "Add new feature"
+Push and create a PR:
 
-OpenMorph.NET is licensed under the **Apache License 2.0**. You can freely use, modify, and distribute this tool in your own projects, but you should include the same license and give proper credit to the original authors.
+git push origin feature-name
+📄 License
+OpenMorph.NET is licensed under the Apache License 2.0.
+See the LICENSE file for details.
 
-See the [LICENSE](LICENSE) file for more details.
+🌐 Where to Find Us
+GitHub: https://github.com/Michi0403/OpenMorph.NET
 
-## 🌐 Where to Find Us
+Issues: Submit Feedback
 
-- **GitHub Repository**: [https://github.com/YourUsername/OpenMorph.NET](https://github.com/YourUsername/OpenMorph.NET)
-- **Issues & Feature Requests**: [Open Issues](https://github.com/YourUsername/OpenMorph.NET/issues)
-
-## 🙌 Credits
-
-This project was built with love and collaboration by **Micha** and **ChatGPT** 💖
-
-Special thanks to the **open-source community** for making it possible to build such awesome tools together!
-
----
-
-Let's make 3D models **editable by code** again!
+🙌 Credits
+This project was built with love and collaboration by Micha and ChatGPT 💖
+Big hugs to the open-source community for making projects like this possible!

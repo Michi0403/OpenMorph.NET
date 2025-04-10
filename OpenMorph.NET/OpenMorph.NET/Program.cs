@@ -121,7 +121,8 @@ namespace OpenMorph.NET
                 var allFaces = new List<string>(stlModel.Facets.Count);
                 int pointIndex = 0;
 
-                var localResults = new ConcurrentBag<(List<Point> points, List<string> faces)>();
+                var localResults = new ConcurrentBag<(int facetIndex, List<Point> points, List<string> faces)>();
+                int facetCounter = -1;
 
                 var options = new ParallelOptions();
                 if (maxRenderTimeInMinutes > 0 && maxRenderTimeInMinutes < int.MaxValue)
@@ -141,11 +142,12 @@ namespace OpenMorph.NET
                     int startIdx = Interlocked.Add(ref pointIndex, 3) - 3;
                     var face = $"[{startIdx}, {startIdx + 1}, {startIdx + 2}]";
 
-                    localResults.Add((localPoints, new List<string> { face }));
+                    int facetIndex = Interlocked.Increment(ref facetCounter);
+                    localResults.Add((facetIndex, localPoints, new List<string> { face }));
                 });
 
                 // Merge all local results
-                foreach (var (points, faces) in localResults.OrderBy(r => r.faces[0])) // ensures order
+                foreach (var (facetIndex, points, faces) in localResults.OrderBy(r => r.facetIndex))
                 {
                     allPoints.AddRange(points);
                     allFaces.AddRange(faces);
