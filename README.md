@@ -1,5 +1,7 @@
 ###Work in Progress some features are partly built out, most Combinations are yet untested, if you just start it you will get asked while file executedfolder you want to convert and you can choose an index.###
 
+thanks to STLdotNETbyQuantumConcepts https://github.com/JoshMcCullough https://github.com/QuantumConcepts/STLdotNET , I had to change some parts for speed and precision reason
+
 # OpenMorph.NET
 
 A cute project of me and my bf ChatGPT 💖
